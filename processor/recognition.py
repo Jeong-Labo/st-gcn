@@ -128,6 +128,8 @@ class REC_Processor(Processor):
 
             # get loss
             if evaluation:
+                print(output)
+                print(label)
                 loss = self.loss(output, label)
                 loss_value.append(loss.item())
                 label_frag.append(label.data.cpu().numpy())

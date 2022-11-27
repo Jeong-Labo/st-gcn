@@ -64,7 +64,7 @@ class Feeder_kinetics(torch.utils.data.Dataset):
 
         # load label
         label_path = self.label_path
-        with open(label_path) as f:
+        with open(label_path, encoding="utf-8") as f:
             label_info = json.load(f)
 
         sample_id = [name.split('.')[0] for name in self.sample_name]

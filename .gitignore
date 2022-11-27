@@ -109,3 +109,8 @@ ENV/
 
 # mypy
 .mypy_cache/
+
+
+# 新しく追加
+/data_original/
+/openpose/
