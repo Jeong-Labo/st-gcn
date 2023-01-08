@@ -1,0 +1,53 @@
+FROM nvidia/cuda:8.0-cudnn6-runtime-ubuntu16.04
+
+ENV DEBIAN_FRONTEND noninteractive
+ENV NVIDIA_VISIBLE_DEVICES all
+ENV NVIDIA_DRIVER_CAPABILITIES video,compute,utility
+
+# Install required Packages
+
+RUN set -xe && \
+    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys A4B469963BF863CC && \
+    apt update && \
+    apt install -y \
+        git sudo wget \
+        build-essential \
+        ffmpeg \
+        gdebi \
+        libopencv-dev \
+        cmake
+
+# Build OpenPose
+
+WORKDIR /usr/local
+RUN set -xe && \
+    git clone https://github.com/CMU-Perceptual-Computing-Lab/openpose && \
+    cd /usr/local/openpose && \
+    bash ./scripts/ubuntu/install_deps.sh
+
+RUN mkdir -p /usr/local/openpose/build && \
+    cd /usr/local/openpose/build && \
+    cmake -DBUILD_PYTHON=true .. && \
+    make -j$(nproc) && \
+    make install
+
+# Cleanup
+
+WORKDIR /app
+RUN set -xe && \
+    apt clean && \
+    rm -rf /tmp/cmake.tar.gz && \
+    ln -s /usr/local/openpose/build/examples/openpose/openpose.bin /usr/local/bin/openpose.bin
+
+
+# Install st-gcn
+RUN git clone -b st-gcn https://github.com/yysijie/st-gcn.git && \
+    python3 -m pip install -U pip setuptools && \
+    pip3 install torch==1.12.1 torchvision==0.13.1 --extra-index-url https://download.pytorch.org/whl/cu113 && \
+    pip3 install -r st-gcn/requirements.txt && \
+    cp -r /app/st-gcn/torchlight/torchlight /usr/local/lib/python3.8/dist-packages/ && \
+    cd /app/st-gcn && \
+    bash tools/get_models.sh
+
+# opWrapper.emplaceAndPop(op.VectorDatum([datum]))
+# python3 main.py demo --openpose /usr/local/openpose --video /usr/local/openpose/examples/media/video.avi

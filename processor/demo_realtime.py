@@ -32,11 +32,13 @@ class DemoRealtime(IO):
     def start(self):
         # load openpose python api
         if self.arg.openpose is not None:
-            sys.path.append('{}/python'.format(self.arg.openpose))
-            sys.path.append('{}/build/python'.format(self.arg.openpose))
+            sys.path.append(self.arg.openpose)
+            #sys.path.append('{}/python'.format(self.arg.openpose))
+            #sys.path.append('{}/build/python'.format(self.arg.openpose))
         try:
-            from openpose import pyopenpose as op
-        except:
+            import pyopenpose as op
+        except Exception as e:
+            print(e)
             print('Can not find Openpose Python API.')
             return
 

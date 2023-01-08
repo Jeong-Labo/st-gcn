@@ -8,7 +8,6 @@ import time
 
 import numpy as np
 import torch
-from torchvision import transforms
 import skvideo.io
 
 from .io import IO
@@ -17,14 +16,10 @@ import tools.utils as utils
 
 import cv2
 
-from yolov7.utils.datasets import letterbox
-from yolov7.utils.general import non_max_suppression_kpt
-from yolov7.utils.plots import output_to_keypoint, plot_skeleton_kpts
-
-
 class DemoOffline(IO):
 
     def start(self):
+        
         # initiate
         label_name_path = './resource/kinetics_skeleton/label_name.txt'
         with open(label_name_path) as f:
@@ -48,21 +43,15 @@ class DemoOffline(IO):
                             video_label_name, intensity, video)
 
         # visualize
-        fmt = cv2.VideoWriter_fourcc(*"mp4v")
-        img_shape = next(images).shape
-        writer = cv2.VideoWriter("./out.mp4", fmt, 30, (img_shape[1], img_shape[0]))
         for image in images:
             image = image.astype(np.uint8)
-            #cv2.imshow("ST-GCN", image)
-            #if cv2.waitKey(1) & 0xFF == ord('q'):
-            #    break
-            writer.write(image)
-        writer.release()
+            cv2.imshow("ST-GCN", image)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
 
     def predict(self, data):
         # forward
-        with torch.no_grad():
-            output, feature = self.model.extract_feature(data)
+        output, feature = self.model.extract_feature(data)
         output = output[0]
         feature = feature[0]
         intensity = (feature*feature).sum(dim=0)**0.5
@@ -103,14 +92,24 @@ class DemoOffline(IO):
         return images
 
     def pose_estimation(self):
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        print(device)
-        weigths = torch.load('./models/yolov7-w6-pose.pt')
-        yolo = weigths['model']
-        yolo = yolo.half().to(device)
-        yolo.eval()
+        # load openpose python api
+        if self.arg.openpose is not None:
+            sys.path.append('{}/python'.format(self.arg.openpose))
+            sys.path.append('{}/build/python'.format(self.arg.openpose))
+        try:
+            import pyopenpose as op
+        except:
+            print('Can not find Openpose Python API.')
+            return
+
+
+        video_name = self.arg.video.split('/')[-1].split('.')[0]
 
         # initiate
+        opWrapper = op.WrapperPython()
+        params = dict(model_folder='./models', model_pose='COCO')
+        opWrapper.configure(params)
+        opWrapper.start()
         self.model.eval()
         video_capture = cv2.VideoCapture(self.arg.video)
         video_length = int(video_capture.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -120,62 +119,29 @@ class DemoOffline(IO):
         start_time = time.time()
         frame_index = 0
         video = list()
-
-        transform = transforms.ToTensor()
         while(True):
+
             # get image
-            _, orig_image = video_capture.read()
+            ret, orig_image = video_capture.read()
             if orig_image is None:
                 break
-            image = letterbox(orig_image, 960, stride=64, auto=True)[0]
             source_H, source_W, _ = orig_image.shape
             orig_image = cv2.resize(
                 orig_image, (256 * source_W // source_H, 256))
-            H, W, _ = image.shape
+            H, W, _ = orig_image.shape
             video.append(orig_image)
 
-            image = transform(image)
-            image = image.unsqueeze(0).to(device)
-            with torch.no_grad():
-                output, _ = yolo(image.half())
-            output = non_max_suppression_kpt(output, 0.25, 0.65, nc=yolo.yaml['nc'], nkpt=yolo.yaml['nkpt'], kpt_label=True)
-            with torch.no_grad():
-                output = output_to_keypoint(output)
-            if(len(output) == 0):
-                output = output.reshape(0, 58)
-            print(output.shape)
-            multi_pose = [
-                output[:, 7+3*0:10+3*0],
-                (output[:, 7+3*6:10+3*6] + output[:, 7+3*5:10+3*5]) / 2,
-                output[:, 7+3*6:10+3*6],
-                output[:, 7+3*8:10+3*8],
-                output[:, 7+3*10:10+3*10],
-                output[:, 7+3*5:10+3*5],
-                output[:, 7+3*7:10+3*7],
-                output[:, 7+3*9:10+3*9],
-                output[:, 7+3*12:10+3*12],
-                output[:, 7+3*14:10+3*14],
-                output[:, 7+3*16:10+3*16],
-                output[:, 7+3*11:10+3*11],
-                output[:, 7+3*13:10+3*13],
-                output[:, 7+3*15:10+3*15],
-                output[:, 7+3*2:10+3*2],
-                output[:, 7+3*1:10+3*1],
-                output[:, 7+3*4:10+3*4],
-                output[:, 7+3*3:10+3*3],
-            ]
-            multi_pose = np.stack(multi_pose, axis=1)
-            """
-            nimg = image[0].permute(1, 2, 0) * 255
-            nimg = nimg.cpu().numpy().astype(np.uint8)
-            nimg = cv2.cvtColor(nimg, cv2.COLOR_RGB2BGR)
-            for idx in range(output.shape[0]):
-                plot_skeleton_kpts(nimg, output[idx, 7:].T, 3)
-            """
+            # pose estimation
+            datum = op.Datum()
+            datum.cvInputData = orig_image
+            opWrapper.emplaceAndPop([datum])
+            multi_pose = datum.poseKeypoints  # (num_person, num_joint, 3)
+            if len(multi_pose.shape) != 3:
+                continue
 
             # normalization
-            multi_pose[:, :, 0] = multi_pose[:, :, 0] / W
-            multi_pose[:, :, 1] = multi_pose[:, :, 1] / H
+            multi_pose[:, :, 0] = multi_pose[:, :, 0]/W
+            multi_pose[:, :, 1] = multi_pose[:, :, 1]/H
             multi_pose[:, :, 0:2] = multi_pose[:, :, 0:2] - 0.5
             multi_pose[:, :, 0][multi_pose[:, :, 2] == 0] = 0
             multi_pose[:, :, 1][multi_pose[:, :, 2] == 0] = 0
@@ -186,7 +152,6 @@ class DemoOffline(IO):
 
             print('Pose estimation ({}/{}).'.format(frame_index, video_length))
 
-        del yolo
         data_numpy = pose_tracker.get_skeleton_sequence()
         return video, data_numpy
 
