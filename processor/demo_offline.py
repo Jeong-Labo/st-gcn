@@ -17,9 +17,9 @@ import tools.utils as utils
 
 import cv2
 
-from yolov7.utils.datasets import letterbox
-from yolov7.utils.general import non_max_suppression_kpt
-from yolov7.utils.plots import output_to_keypoint, plot_skeleton_kpts
+from utils.datasets import letterbox
+from utils.general import non_max_suppression_kpt
+from utils.plots import output_to_keypoint
 
 
 class DemoOffline(IO):
@@ -105,7 +105,7 @@ class DemoOffline(IO):
     def pose_estimation(self):
         device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         print(device)
-        weigths = torch.load('./models/yolov7-w6-pose.pt')
+        weigths = torch.load('./weights/yolov7-w6-pose.pt')
         yolo = weigths['model']
         yolo = yolo.half().to(device)
         yolo.eval()

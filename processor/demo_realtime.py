@@ -8,6 +8,7 @@ import time
 
 import numpy as np
 import torch
+from torchvision import transforms
 import skvideo.io
 
 from .io import IO
@@ -15,6 +16,11 @@ import tools
 import tools.utils as utils
 
 import cv2
+
+from utils.datasets import letterbox
+from utils.general import non_max_suppression_kpt
+from utils.plots import output_to_keypoint
+
 
 class DemoRealtime(IO):
     """ A demo for utilizing st-gcn in the realtime action recognition.
@@ -30,18 +36,6 @@ class DemoRealtime(IO):
     """
 
     def start(self):
-        # load openpose python api
-        if self.arg.openpose is not None:
-            sys.path.append(self.arg.openpose)
-            #sys.path.append('{}/python'.format(self.arg.openpose))
-            #sys.path.append('{}/build/python'.format(self.arg.openpose))
-        try:
-            import pyopenpose as op
-        except Exception as e:
-            print(e)
-            print('Can not find Openpose Python API.')
-            return
-
         video_name = self.arg.video.split('/')[-1].split('.')[0]
         label_name_path = './resource/kinetics_skeleton/label_name.txt'
         with open(label_name_path) as f:
@@ -50,10 +44,14 @@ class DemoRealtime(IO):
             self.label_name = label_name
 
         # initiate
-        opWrapper = op.WrapperPython()
-        params = dict(model_folder='./models', model_pose='COCO')
-        opWrapper.configure(params)
-        opWrapper.start()
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        print(device)
+        weigths = torch.load('./weights/yolov7-w6-pose.pt')
+        yolo = weigths['model']
+        yolo = yolo.half().to(device)
+        yolo.eval()
+        transform = transforms.ToTensor()
+
         self.model.eval()
         pose_tracker = naive_pose_tracker()
 
@@ -66,25 +64,50 @@ class DemoRealtime(IO):
         start_time = time.time()
         frame_index = 0
         while(True):
-
             tic = time.time()
 
             # get image
-            ret, orig_image = video_capture.read()
+            _, orig_image = video_capture.read()
             if orig_image is None:
                 break
+            image = letterbox(orig_image, 960, stride=64, auto=True)[0]
             source_H, source_W, _ = orig_image.shape
             orig_image = cv2.resize(
                 orig_image, (256 * source_W // source_H, 256))
-            H, W, _ = orig_image.shape
-            
+            H, W, _ = image.shape
+
             # pose estimation
-            datum = op.Datum()
-            datum.cvInputData = orig_image
-            opWrapper.emplaceAndPop([datum])
-            multi_pose = datum.poseKeypoints  # (num_person, num_joint, 3)
-            if len(multi_pose.shape) != 3:
-                continue
+            image = transform(image)
+            image = image.unsqueeze(0).to(device)
+            with torch.no_grad():
+                output, _ = yolo(image.half())
+            output = non_max_suppression_kpt(output, 0.25, 0.65, nc=yolo.yaml['nc'], nkpt=yolo.yaml['nkpt'], kpt_label=True)
+            with torch.no_grad():
+                output = output_to_keypoint(output)
+            if(len(output) == 0):
+                output = output.reshape(0, 58)
+            print(output.shape)
+            multi_pose = [
+                output[:, 7+3*0:10+3*0],
+                (output[:, 7+3*6:10+3*6] + output[:, 7+3*5:10+3*5]) / 2,
+                output[:, 7+3*6:10+3*6],
+                output[:, 7+3*8:10+3*8],
+                output[:, 7+3*10:10+3*10],
+                output[:, 7+3*5:10+3*5],
+                output[:, 7+3*7:10+3*7],
+                output[:, 7+3*9:10+3*9],
+                output[:, 7+3*12:10+3*12],
+                output[:, 7+3*14:10+3*14],
+                output[:, 7+3*16:10+3*16],
+                output[:, 7+3*11:10+3*11],
+                output[:, 7+3*13:10+3*13],
+                output[:, 7+3*15:10+3*15],
+                output[:, 7+3*2:10+3*2],
+                output[:, 7+3*1:10+3*1],
+                output[:, 7+3*4:10+3*4],
+                output[:, 7+3*3:10+3*3],
+            ]
+            multi_pose = np.stack(multi_pose, axis=1)
 
             # normalization
             multi_pose[:, :, 0] = multi_pose[:, :, 0]/W

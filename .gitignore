@@ -5,7 +5,7 @@ data
 config_v0/*
 backup/*
 .vscode
-model/*
+weights/*
 *.pt
 *.caffemodel
 cache/
