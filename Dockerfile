@@ -4,8 +4,14 @@ WORKDIR /app
 ENV TZ=Asia/Tokyo
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
-RUN apt update \
-    && apt install -y wget curl git make build-essential
+RUN set -xe && \
+    apt update && \
+    apt install -y \
+        git wget \
+        build-essential \
+        ffmpeg \
+        libopencv-dev \
+        python-is-python3
 
 RUN apt install -y python3-distutils python3.9 python3.9-dev \
     && wget -O ~/get-pip.py https://bootstrap.pypa.io/get-pip.py \
@@ -16,25 +22,9 @@ RUN apt install -y python3-distutils python3.9 python3.9-dev \
     && python -m pip install --upgrade pip setuptools --no-cache-dir \
     && python -m pip install wheel --no-cache-dir
 
-RUN pip install jupyter notebook jupyterlab jupyter-contrib-nbextensions
-
-COPY requirements.txt ./
-
-RUN pip install -r requirements.txt
-
-RUN apt install -y sudo libopencv-dev qtbase5-dev cmake-qt-gui \
-    && git clone https://github.com/CMU-Perceptual-Computing-Lab/openpose \
-    && cd openpose \
-    && bash ./scripts/ubuntu/install_deps.sh \
-    && mkdir build \
-    && cd build \
-    && cmake .. \
-    && make -j`nproc` \
-    && make install \
-    && cd /app
-
-COPY torchlight/ ./torchlight/
-
-RUN cd torchlight \
-    && python setup.py install --install-purelib /usr/local/lib/python3.9/dist-packages \
-    && cd ../
+RUN git clone -b st-gcn https://github.com/Jeong-Labo/st-gcn.git && \
+    pip3 install torch==1.12.1 torchvision==0.13.1 --extra-index-url https://download.pytorch.org/whl/cu113 && \
+    pip3 install -r /app/st-gcn/requirements.txt && \
+    cp -r /app/st-gcn/torchlight/torchlight /usr/local/lib/python3.8/dist-packages/ && \
+    cd /app/st-gcn && \
+    bash tools/get_models.sh

@@ -2,9 +2,11 @@ version: "3"
 services:
   trainer:
     build: .
-    container_name: stgcn
+    container_name: maboroshi
     volumes:
-      - ./:/app
+      - ./weights:/app/st-gcn/weights
+      - ./video:/app/st-gcn/video
+      - ./output:/app/st-gcn/output
     deploy:
       resources:
         reservations:
