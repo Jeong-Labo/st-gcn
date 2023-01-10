@@ -7,3 +7,7 @@ imageio
 scikit-video
 torch
 torchvision
+tqdm
+pandas
+matplotlib
+seaborn
