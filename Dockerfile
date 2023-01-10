@@ -25,6 +25,4 @@ RUN apt install -y python3-distutils python3.9 python3.9-dev \
 RUN git clone -b st-gcn https://github.com/Jeong-Labo/st-gcn.git && \
     pip3 install torch==1.12.1 torchvision==0.13.1 --extra-index-url https://download.pytorch.org/whl/cu113 && \
     pip3 install -r /app/st-gcn/requirements.txt && \
-    cp -r /app/st-gcn/torchlight/torchlight /usr/local/lib/python3.8/dist-packages/ && \
-    cd /app/st-gcn && \
-    bash tools/get_models.sh
+    cp -r /app/st-gcn/torchlight/torchlight /usr/local/lib/python3.9/dist-packages/

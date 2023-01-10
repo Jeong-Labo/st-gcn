@@ -50,7 +50,7 @@ class DemoOffline(IO):
         # visualize
         fmt = cv2.VideoWriter_fourcc(*"mp4v")
         img_shape = next(images).shape
-        writer = cv2.VideoWriter("./out.mp4", fmt, 30, (img_shape[1], img_shape[0]))
+        writer = cv2.VideoWriter("./output/" + self.arg.output, fmt, 30, (img_shape[1], img_shape[0]))
         for image in images:
             image = image.astype(np.uint8)
             #cv2.imshow("ST-GCN", image)
@@ -204,6 +204,9 @@ class DemoOffline(IO):
         parser.add_argument('--video',
                             default='./resource/media/skateboarding.mp4',
                             help='Path to video')
+        parser.add_argument('--output',
+                            default='out.mp4',
+                            help='Name of output video')
         parser.add_argument('--openpose',
                             default=None,
                             help='Path to openpose')
